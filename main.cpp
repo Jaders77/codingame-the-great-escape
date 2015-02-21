@@ -1,6 +1,6 @@
-#define CPP11
+//#define CPP11
 #define SIMU
-
+#define BRUTFORCE_DEEP_MAX 2
 // cout, cin
 #include <iostream>
 // string
@@ -9,11 +9,14 @@
 #include <vector>
 // list
 #include <list>
+// queue
 #include <queue>
 // setw
 #include <iomanip>
 // shared_ptr
 #include <memory>
+// numeric_limits
+#include <limits>
 
 using namespace std;
 
@@ -42,14 +45,11 @@ public:
 	Wall(int aWidth, int aHeight)
 		: mWidth(aWidth)
 		, mHeight(aHeight)
-		, mVWallVect(mWidth * mHeight)
-		, mHWallVect(mWidth * mHeight)
-		, mVSimuWallVect(mWidth * mHeight)
-		, mHSimuWallVect(mWidth * mHeight)
+		, mVWallVect(mWidth * mHeight, 0)
+		, mHWallVect(mWidth * mHeight, 0)
+		, mVSimuWallVect(mWidth * mHeight, 0)
+		, mHSimuWallVect(mWidth * mHeight, 0)
 	{
-		fill(mVWallVect.begin(), mVWallVect.end(), 0);
-		fill(mHWallVect.begin(), mHWallVect.end(), 0);
-		clearSimuWall();
 	}
 
 	~Wall(void)
@@ -185,10 +185,7 @@ public:
 	typedef shared_ptr<Player> Ptr;
 	typedef list<EDirection> StepList;
 	typedef vector<int> PathfindingVect;
-	mutable PathfindingVect mPathfindingVect;
-	typedef queue<pair<int, int> > PosQueue;
-	mutable shared_ptr<PosQueue> mCurrentPosListPtr;
-	mutable shared_ptr<PosQueue> mNewPosListPtr;
+   typedef queue<pair<int, int> > PosQueue;
 
 public:
 	Player(int aWidth, int aHeight, Wall* apWall, EDirection aStartPos)
@@ -198,7 +195,7 @@ public:
 		, mStartPos(aStartPos)
 		, mCurrentPosX(-1)
 		, mCurrentPosY(-1)
-		, mPathfindingVect(aWidth * aHeight)
+		, mPathfindingVect(aWidth * aHeight, -1)
 		, mCurrentPosListPtr(new PosQueue())
 		, mNewPosListPtr(new PosQueue())
 	{
@@ -224,82 +221,82 @@ public:
 		return mCurrentPosY;
 	}
 
-	void findBestDirection(StepList& aStepList, bool abDump = false) const
+	void findBestDirection(StepList& aStepList, bool abDump = false)
 	{
 		int lBestValue = -1;
 		int lBestX = -1;
 		int lBestY = -1;
-		computePathfinding(mPathfindingVect, lBestValue, lBestX, lBestY);
+		computePathfinding(lBestValue, lBestX, lBestY);
 		//cerr << "Best destination [" << lBestX << "; " << lBestY << "] in " << lBestValue << " steps" << endl;
 		while (lBestValue > 0) {
 			lBestValue--;
-			if (mpWall->isLeftValid(lBestX, lBestY) && (get(mPathfindingVect, lBestX - 1, lBestY) == lBestValue)) {
+			if (mpWall->isLeftValid(lBestX, lBestY) && (get(lBestX - 1, lBestY) == lBestValue)) {
 				lBestX--;
 				aStepList.push_front(eRight);
-			} else if (mpWall->isRightValid(lBestX, lBestY) && (get(mPathfindingVect, lBestX + 1, lBestY) == lBestValue)) {
+			} else if (mpWall->isRightValid(lBestX, lBestY) && (get(lBestX + 1, lBestY) == lBestValue)) {
 				lBestX++;
 				aStepList.push_front(eLeft);
-			} else if (mpWall->isUpValid(lBestX, lBestY) && (get(mPathfindingVect, lBestX, lBestY - 1) == lBestValue)) {
+			} else if (mpWall->isUpValid(lBestX, lBestY) && (get(lBestX, lBestY - 1) == lBestValue)) {
 				lBestY--;
 				aStepList.push_front(eDown);
-			} else if (mpWall->isDownValid(lBestX, lBestY) && (get(mPathfindingVect, lBestX, lBestY + 1) == lBestValue)) {
+			} else if (mpWall->isDownValid(lBestX, lBestY) && (get(lBestX, lBestY + 1) == lBestValue)) {
 				lBestY++;
 				aStepList.push_front(eUp);
 			}
 		}
 		if (abDump) {
-			dump(mPathfindingVect);
+			dump();
 		}
 	}
 
-	void findBestStep(int& aBestValue, bool abDump = false) const
+	void findBestStep(int& aBestValue, bool abDump = false)
 	{
 		int lBestX = -1;
 		int lBestY = -1;
-		computePathfinding(mPathfindingVect, aBestValue, lBestX, lBestY);
+		computePathfinding(aBestValue, lBestX, lBestY);
 		if (abDump) {
-			dump(mPathfindingVect);
+			dump();
 		}
 	}
 
-	void findBestNextStep(int& aBestValue, int& aBestX, int& aBestY, bool abDump = false) const
+	void findBestNextStep(int& aBestValue, int& aBestX, int& aBestY, bool abDump = false)
 	{
 		int lBestValue = -1;
-		computePathfinding(mPathfindingVect, lBestValue, aBestX, aBestY);
+		computePathfinding(lBestValue, aBestX, aBestY);
 		aBestValue = lBestValue;
 		while (lBestValue > 1) {
 			lBestValue--;
-			if (mpWall->isLeftValid(aBestX, aBestY) && (get(mPathfindingVect, aBestX - 1, aBestY) == lBestValue)) {
+			if (mpWall->isLeftValid(aBestX, aBestY) && (get(aBestX - 1, aBestY) == lBestValue)) {
 				aBestX--;
-			} else if (mpWall->isRightValid(aBestX, aBestY) && (get(mPathfindingVect, aBestX + 1, aBestY) == lBestValue)) {
+			} else if (mpWall->isRightValid(aBestX, aBestY) && (get(aBestX + 1, aBestY) == lBestValue)) {
 				aBestX++;
-			} else if (mpWall->isUpValid(aBestX, aBestY) && (get(mPathfindingVect, aBestX, aBestY - 1) == lBestValue)) {
+			} else if (mpWall->isUpValid(aBestX, aBestY) && (get(aBestX, aBestY - 1) == lBestValue)) {
 				aBestY--;
-			} else if (mpWall->isDownValid(aBestX, aBestY) && (get(mPathfindingVect, aBestX, aBestY + 1) == lBestValue)) {
+			} else if (mpWall->isDownValid(aBestX, aBestY) && (get(aBestX, aBestY + 1) == lBestValue)) {
 				aBestY++;
 			}
 		}
 		if (abDump) {
-			dump(mPathfindingVect);
+			dump();
 		}
 	}
 
 private:
-	void computePathfinding(PathfindingVect& aPathfindingVect, int& aBestValue, int& aBestX, int& aBestY) const
+	void computePathfinding(int& aBestValue, int& aBestX, int& aBestY)
 	{
 		aBestValue = -1;
 		aBestX = -1;
 		aBestY = -1;
 		int lCurrentStep = 0;
-		fill(aPathfindingVect.begin(), aPathfindingVect.end(), -1);
+		fill(mPathfindingVect.begin(), mPathfindingVect.end(), -1);
 		mCurrentPosListPtr->push(make_pair(mCurrentPosX, mCurrentPosY));
 		bool lIsLoopDone = mCurrentPosListPtr->empty();
 		while (!lIsLoopDone) {
 			while (!lIsLoopDone && !mCurrentPosListPtr->empty()) {
 				int lCurrentX = mCurrentPosListPtr->front().first;
 				int lCurrentY = mCurrentPosListPtr->front().second;
-				if (get(aPathfindingVect, lCurrentX, lCurrentY) < 0) {
-					aPathfindingVect[lCurrentY*mWidth + lCurrentX] = lCurrentStep;
+				if (get(lCurrentX, lCurrentY) < 0) {
+					mPathfindingVect[lCurrentY*mWidth + lCurrentX] = lCurrentStep;
 					switch (mStartPos) {
 					case eLeft:
 						lIsLoopDone = (lCurrentX >= (mWidth - 1));
@@ -343,16 +340,16 @@ private:
 		}
 	}
 
-	inline int get(const PathfindingVect& aPathfindingVect, int aX, int aY) const
+	inline int get(int aX, int aY) const
 	{
-		return aPathfindingVect[aY*mWidth + aX];
+		return mPathfindingVect[aY*mWidth + aX];
 	}
 
-	void dump(const PathfindingVect& aPathfindingVect) const
+	void dump(void) const
 	{
 		for (int lY = 0; lY < mHeight; lY++) {
 			for (int lX = 0; lX < mWidth; lX++) {
-				cerr << setw(2) << get(aPathfindingVect, lX, lY) << " ";
+				cerr << setw(2) << get(lX, lY) << " ";
 			}
 			cerr << endl;
 		}
@@ -365,6 +362,9 @@ private:
 	EDirection mStartPos;
 	int mCurrentPosX;
 	int mCurrentPosY;
+   PathfindingVect mPathfindingVect;
+   shared_ptr<PosQueue> mCurrentPosListPtr;
+   shared_ptr<PosQueue> mNewPosListPtr;
 };
 
 class Scenario
@@ -379,11 +379,11 @@ public:
 		, mMyWallLeft(0)
 		, mEnnemyWallLeft(0)
 		, mWall(aWidth, aHeight)
-		, mPlayerVect(aPlayerCount)
+		, mPlayerVect()
 	{
+      mPlayerVect.reserve(aPlayerCount);
 		for (int i = 0; i < mPlayerCount; i++) {
-			Player::Ptr PlayerPtr(new Player(aWidth, aHeight, &mWall, (EDirection)i));
-			mPlayerVect[i] = PlayerPtr;
+			mPlayerVect.push_back(Player::Ptr(new Player(aWidth, aHeight, &mWall, (EDirection)i)));
 		}
 	}
 
@@ -421,8 +421,41 @@ public:
 		if (mEnnemyWallLeft <= 0) {
 			mOpenDoorCount = 0;
 		}
-		//applyPatternScoredSelection();
-		applyPatternBrutForce();
+
+      int lMyScore = 0;
+      int lBaddestEnemyScore = numeric_limits<int>::max();
+      int lBaddestEnemyId = -1;
+      for (int i = 0; i < mPlayerCount; i++) {
+         Player::Ptr lPlayerPtr = mPlayerVect[i];
+         if (lPlayerPtr->currentX() >= 0) {
+            int lBestValue = -1;
+            lPlayerPtr->findBestStep(lBestValue);
+            if (lBestValue <= 0) {
+               break;
+            } else if (i == mMyId) {
+               cerr << "My position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
+               lMyScore = lBestValue;
+            } else {
+               cerr << "Enemy position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
+               if (lBestValue < lBaddestEnemyScore) {
+                  lBaddestEnemyScore = lBestValue;
+                  lBaddestEnemyId = i;
+               }
+            }
+         }
+      }
+
+      bool lIsReponse = false;
+      if (!lIsReponse) {
+         //lIsReponse = applyPatternScoredSelection(lMyScore, lBaddestEnemyScore, lBaddestEnemyId);
+         lIsReponse = applyPatternBrutForce(lMyScore, lBaddestEnemyScore);
+      }
+      if (!lIsReponse) {
+         lIsReponse = applyPatternOpenDoor(lMyScore);
+      }
+      if (!lIsReponse) {
+         lIsReponse = applyPatternMove();
+      }
 #ifdef CPP11
 		lTimeEnd = high_resolution_clock::now();
 		long long lElapsedMilli = duration_cast<milliseconds>(lTimeEnd - lTimeStart).count();
@@ -431,32 +464,9 @@ public:
 	}
 
 private:
-	void applyPatternScoredSelection(void)
+	bool applyPatternScoredSelection(int aMyScore, int aBaddestEnemyScore, int aBaddestEnemyId)
 	{
-		int lMyScore = 0;
-		int lBaddestEnemyScore = numeric_limits<int>::max();
-		int lBaddestEnemyId = -1;
-		for (int i = 0; i < mPlayerCount; i++) {
-			Player::Ptr lPlayerPtr = mPlayerVect[i];
-			if (lPlayerPtr->currentX() >= 0) {
-				int lBestValue = -1;
-				lPlayerPtr->findBestStep(lBestValue);
-				if (lBestValue <= 0) {
-					break;
-				} else if (i == mMyId) {
-					cerr << "My position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
-					lMyScore = lBestValue;
-				} else {
-					cerr << "Enemy position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
-					if (lBestValue < lBaddestEnemyScore) {
-						lBaddestEnemyScore = lBestValue;
-						lBaddestEnemyId = i;
-					}
-				}
-			}
-		}
-
-		int lCurrentScore = (1000 / lMyScore) - (1000 / lBaddestEnemyScore);
+		int lCurrentScore = (1000 / aMyScore) - (1000 / aBaddestEnemyScore);
 		int lBestScore = lCurrentScore;
 		int lBestScoreX = -1;
 		int lBestScoreY = -1;
@@ -477,7 +487,7 @@ private:
 									break;
 								} else if (i == mMyId) {
 									lScore += 1000 / lBestValue;
-								} else if (i == lBaddestEnemyId) {
+								} else if (i == aBaddestEnemyId) {
 									lScore -= 1000 / lBestValue;
 								}
 							}
@@ -489,7 +499,7 @@ private:
 							lBestScoreY = lY;
 							lBestScoreH = lH ? 'H' : 'V';
 						} else if (lScore == lBestScore) {
-							Player::Ptr lPlayerPtr = mPlayerVect[lBaddestEnemyId];
+							Player::Ptr lPlayerPtr = mPlayerVect[aBaddestEnemyId];
 							int lBestDistX = (lPlayerPtr->currentX() - lBestScoreX);
 							lBestDistX *= lBestDistX;
 							int lBestDistY = (lPlayerPtr->currentY() - lBestScoreY);
@@ -513,84 +523,55 @@ private:
 				}
 			}
 		}
-		bool lIsReponse = false;
-		if (!lIsReponse && (lBestScore > (lCurrentScore + ((mPlayerCount == 2) ? 50 : 200)))) {
+		bool lIsReponse = (lBestScore > (lCurrentScore + ((mPlayerCount == 2) ? 50 : 200)));
+		if (lIsReponse) {
 			lIsReponse = applyPatternWall(lBestScoreX, lBestScoreY, lBestScoreH);
 		}
-		if (!lIsReponse && (lMyScore == 2)) {
-			lIsReponse = applyPatternOpenDoor();
-		}
-		if (!lIsReponse) {
-			lIsReponse = applyPatternMove();
-		}
+      return lIsReponse;
 	}
 
-	void applyPatternBrutForce(void)
+	bool applyPatternBrutForce(int aMyScore, int aBaddestEnemyScore)
 	{
-		int lMyScore = 0;
-		int lBaddestEnemyScore = numeric_limits<int>::max();
-		int lBaddestEnemyId = -1;
-		for (int i = 0; i < mPlayerCount; i++) {
-			Player::Ptr lPlayerPtr = mPlayerVect[i];
-			if (lPlayerPtr->currentX() >= 0) {
-				int lBestValue = -1;
-				lPlayerPtr->findBestStep(lBestValue);
-				if (lBestValue <= 0) {
-					break;
-				} else if (i == mMyId) {
-					cerr << "My position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
-					lMyScore = lBestValue;
-				} else {
-					cerr << "Enemy position: [" << lPlayerPtr->currentX() << "; " << lPlayerPtr->currentY() << "] Score: " << lBestValue << endl;
-					if (lBestValue < lBaddestEnemyScore) {
-						lBaddestEnemyScore = lBestValue;
-						lBaddestEnemyId = i;
-					}
-				}
-			}
-		}
-
-		int lCurrentScore = (1000 / lMyScore) - (1000 / lBaddestEnemyScore);
+	   int lCurrentScore = (1000 / aMyScore) - (1000 / aBaddestEnemyScore);
 		int lBestScore = lCurrentScore;
-		bool lIsValidWay = false;
-		long long lRecurseCount = 0;
-		recursePatternBrutForce(mPlayerVect, min(mMyWallLeft, 2), lBestScore, lRecurseCount);
+      int lBestScoreX = -1;
+      int lBestScoreY = -1;
+      char lBestScoreH = '?';
+      long long lRecurseCount = 0;
+		bool lIsValidWay = recursePatternBrutForce(min(mMyWallLeft, BRUTFORCE_DEEP_MAX), lBestScore, lBestScoreX, lBestScoreY, lBestScoreH, lRecurseCount);
 		cerr << "recursePatternBrutForce count: " << lRecurseCount << endl;
-
-		bool lIsReponse = false;
-		if (!lIsReponse && lIsValidWay && (lBestScore > (lCurrentScore + ((mPlayerCount == 2) ? 50 : 200)))) {
-			//lIsReponse = applyPatternWall(lBestScoreX, lBestScoreY, lBestScoreH);
-		}
-		if (!lIsReponse && (lMyScore == 2)) {
-			lIsReponse = applyPatternOpenDoor();
-		}
-		if (!lIsReponse) {
-			lIsReponse = applyPatternMove();
-		}
+      bool lIsReponse = (lBestScore > (lCurrentScore + ((mPlayerCount == 2) ? 50 : 200)));
+      if (lIsReponse) {
+         lIsReponse = applyPatternWall(lBestScoreX, lBestScoreY, lBestScoreH);
+      }
+      return lIsReponse;
 	}
 
-	bool recursePatternBrutForce(vector<Player::Ptr>& aPlayerVect, int aNbWallLeft, int& aBestScore, long long& aRecurseCount)
+	bool recursePatternBrutForce(int aNbWallLeft, int& aBestScore, int& mBestScoreX, int& mBestScoreY, char& mBestScoreH,long long& aRecurseCount)
 	{
 		bool lIsValidWay = false;
 		aRecurseCount++;
+      pair<int, int> lPlayerPositionBackupVect[3];
+      //lPlayerPositionBackupVect.reserve(mPlayerCount);
+      for (int i = 0; i < mPlayerCount; i++) {
+         Player::Ptr lPlayerPtr = mPlayerVect[i];
+         lPlayerPositionBackupVect[i].first = lPlayerPtr->currentX();
+         lPlayerPositionBackupVect[i].second = lPlayerPtr->currentX();
+      }
 		//cerr << "recursePatternBrutForce : " << aRecurseCount << endl;
-		vector<Player::Ptr> lPlayerCopyVect(mPlayerCount);
-		for (int i = 0; i < mPlayerCount; i++) {
-			Player::Ptr PlayerPtr(new Player(*aPlayerVect[i]));
-			lPlayerCopyVect[i] = PlayerPtr;
-		}
-		/*int lBestScoreX = -1;
-		int lBestScoreY = -1;
-		char lBestScoreH = '?';*/
 		for (int lY = 0; lY < mHeight; lY++) {
 			for (int lX = 0; lX < mWidth; lX++) {
 				for (int lH = 0; lH < 2; lH++) {
 					if (mWall.isWallValid(lX, lY, lH ? 'H' : 'V')) {
 						mWall.addSimuWall(lX, lY, lH ? 'H' : 'V');
 						bool lIsValidNewWay = true;
-						int lScore = 0;
+                  int lScore = 0;
+                  int lScoreX = -1;
+                  int lScoreY = -1;
+                  char lScoreH = '?';
 						for (int i = 0; lIsValidNewWay && (i < mPlayerCount); i++) {
-							Player::Ptr lPlayerPtr = aPlayerVect[i];
+							Player::Ptr lPlayerPtr = mPlayerVect[i];
+                     lPlayerPtr->setCurrentPosition(lPlayerPositionBackupVect[i].first, lPlayerPositionBackupVect[i].second);
 							if (lPlayerPtr->currentX() >= 0) {
 								int lBestValue = -1;
 								int lBestX = -1;
@@ -603,37 +584,28 @@ private:
 								} else {
 									lScore -= 1000 / lBestValue;
 								}
-								lPlayerCopyVect[i]->setCurrentPosition(lBestX, lBestY);
+								lPlayerPtr->setCurrentPosition(lBestX, lBestY);
 							}
 						}
 						if (lIsValidNewWay)
 						{
 							if (lScore > aBestScore) {
 								aBestScore = lScore;
+								mBestScoreX = lX;
+								mBestScoreY = lY;
+								mBestScoreH = lH ? 'H' : 'V';
 								lIsValidWay = true;
-								/*lBestScoreX = lX;
-								lBestScoreY = lY;
-								lBestScoreH = lH ? 'H' : 'V';*/
 							}
 							if (aNbWallLeft > 0) {
-/*#ifdef CPP11
-								time_point<high_resolution_clock> lTimeStart, lTimeEnd;
-								lTimeStart = high_resolution_clock::now();
-#endif*/
-								if (recursePatternBrutForce(lPlayerCopyVect, aNbWallLeft - 1, lScore, aRecurseCount)) {
+								if (recursePatternBrutForce(aNbWallLeft - 1, lScore, lScoreX, lScoreY, lScoreH, aRecurseCount)) {
 									if (lScore > aBestScore) {
 										aBestScore = lScore;
-										lIsValidWay = true;
-										/*lBestScoreX = lX;
-										lBestScoreY = lY;
-										lBestScoreH = lH ? 'H' : 'V';*/
+										mBestScoreX = lScoreX;
+										mBestScoreY = lScoreY;
+										mBestScoreH = lScoreH;
+                              lIsValidWay = true;
 									}
 								}
-/*#ifdef CPP11
-								lTimeEnd = high_resolution_clock::now();
-								long long lElapsedMilli = duration_cast<milliseconds>(lTimeEnd - lTimeStart).count();
-								cerr << "recursePatternBrutForce ExecTime: " << lElapsedMilli << "ms" << endl;
-#endif*/
 							}
 						}
 						mWall.removeSimuWall(lX, lY, lH ? 'H' : 'V');
@@ -653,10 +625,10 @@ private:
 		return lIsReponse;
 	}
 
-	bool applyPatternOpenDoor(void)
+	bool applyPatternOpenDoor(int aMyScore)
 	{
 		bool lIsReponse = false;
-		if ((mOpenDoorCount > 0) && (mMyWallLeft > 0)) {
+		if ((mOpenDoorCount > 0) && (mMyWallLeft > 0) && (aMyScore == 2)) {
 			Player::Ptr lPlayerPtr = mPlayerVect[mMyId];
 			switch (mMyId) {
 			case eLeft:
@@ -782,7 +754,7 @@ int main()
 	cin >> w >> h >> playerCount >> myId; cin.ignore();
 	Scenario lScenario(w, h, playerCount, myId);
 #else
-	Scenario lScenario(9, 9, 2, 0);
+	Scenario lScenario(9, 9, 3, 0);
 #endif
 	// game loop
 	while (1) {
@@ -807,7 +779,7 @@ int main()
 #else
 		lScenario.updatePlayerData(0, 0, 3, 6);
 		lScenario.updatePlayerData(1, 8, 4, 6);
-		//lScenario.updatePlayerData(2, 3, 0, 6);
+		lScenario.updatePlayerData(2, 3, 0, 6);
 #endif
 		lScenario.runIteration();
 	}
